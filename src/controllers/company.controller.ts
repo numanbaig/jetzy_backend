@@ -2,8 +2,8 @@ import { Company } from '../models/company.model.ts';
 import { asyncHandler } from '../utils/asyncHandler.ts';
 import { sendNewCompanyEmail } from '../utils/mailer.ts';
 
-import path from "path";
-import fs from "fs";
+import * as path from "path";
+import * as fs from "fs";
 
 export const getAllCompanies = asyncHandler(async (req, res) => {
   const companies = await Company.find({ user_id: req.user._id });
@@ -38,25 +38,37 @@ export const getCompany = asyncHandler(async (req, res) => {
 
 
 export const createCompany = asyncHandler(async (req, res) => {
-  const { name, email, website,logo } = req.body;
-console.log(logo);
-const existingCompany = await Company.findOne({ email });
-if (existingCompany) {
-  return res.status(400).json({
-    success: false,
-    error: "Email already exists in our system",
-  });
-}
+  const { name, email, website } = req.body;
+
+  // Validate required fields
+  if (!name || !email) {
+    // Clean up uploaded file if validation fails
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    return res.status(400).json({
+      success: false,
+      error: "Name and email are required",
+    });
+  }
+
+  const existingCompany = await Company.findOne({ email });
+  if (existingCompany) {
+    // Clean up uploaded file if email already exists
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    return res.status(400).json({
+      success: false,
+      error: "Email already exists in our system",
+    });
+  }
 
   let logoPath;
   if (req.file) {
-    const ext = path.extname(req.file.originalname);
-    const fileName = `${Date.now()}${ext}`;
-    const destination = path.join("public", "company_logos", fileName);
-    fs.renameSync(req.file.path, destination);
-    logoPath = `company_logos/${fileName}`;
+    // Multer has already saved the file with the correct name
+    logoPath = `company_logos/${req.file.filename}`;
   }
-
 
   const company = await Company.create({
     name,
@@ -95,8 +107,23 @@ export const updateCompany = asyncHandler(async (req, res) => {
     });
   }
 
+  const updateData = { ...req.body };
 
-  company = await Company.findByIdAndUpdate(req.params.id, req.body, {
+  // Handle logo upload
+  if (req.file) {
+    // Delete old logo file if it exists
+    if (company.logo) {
+      const oldLogoPath = path.join("public", company.logo);
+      if (fs.existsSync(oldLogoPath)) {
+        fs.unlinkSync(oldLogoPath);
+      }
+    }
+    
+    // Set new logo path
+    updateData.logo = `company_logos/${req.file.filename}`;
+  }
+
+  company = await Company.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true
   });
@@ -115,19 +142,20 @@ export const deleteCompany = asyncHandler(async (req, res) => {
     user_id: req.user._id,
   });
 
-  // if (!company) {
-  //   return res.status(404).json({
-  //     success: false,
-  //     error: "Company not found",
-  //   });
-  // }
+  if (!company) {
+    return res.status(404).json({
+      success: false,
+      error: "Company not found",
+    });
+  }
 
-  // if (company.logo) {
-  //   const logoFullPath = path.join(__dirname, "..", "public", company.logo);
-  //   if (fs.existsSync(logoFullPath)) {
-  //     fs.unlinkSync(logoFullPath);
-  //   }
-  // }
+  // Delete logo file if it exists
+  if (company.logo) {
+    const logoFullPath = path.join("public", company.logo);
+    if (fs.existsSync(logoFullPath)) {
+      fs.unlinkSync(logoFullPath);
+    }
+  }
 
   await company.deleteOne();
 
