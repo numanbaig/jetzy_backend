@@ -1,8 +1,9 @@
 import { Company } from '../models/company.model.ts';
 import { asyncHandler } from '../utils/asyncHandler.ts';
-const fs = 'fs';
-const path = 'path';
+import { sendNewCompanyEmail } from '../utils/mailer.ts';
 
+import path from "path";
+import fs from "fs";
 
 export const getAllCompanies = asyncHandler(async (req, res) => {
   const companies = await Company.find({ user_id: req.user._id });
@@ -35,32 +36,50 @@ export const getCompany = asyncHandler(async (req, res) => {
 });
 
 
-export const createCompany = asyncHandler(async (req, res) => {
-  const { name, email, website } = req.body;
-  const logoPath = req.file?.path;
 
-  // Check if email already exists
+export const createCompany = asyncHandler(async (req, res) => {
+  const { name, email, website,logo } = req.body;
+console.log(logo);
+  let logoPath;
+  if (req.file) {
+    const ext = path.extname(req.file.originalname);
+    const fileName = `${Date.now()}${ext}`;
+    const destination = path.join("public", "company_logos", fileName);
+    fs.renameSync(req.file.path, destination);
+    logoPath = `company_logos/${fileName}`;
+  }
+
   const existingCompany = await Company.findOne({ email });
   if (existingCompany) {
     return res.status(400).json({
       success: false,
-      error: "Email already exists in our system"
+      error: "Email already exists in our system",
     });
   }
+
   const company = await Company.create({
     name,
     email,
     website,
     logo: logoPath,
-    user_id: req.user._id
+    user_id: req.user._id,
   });
+
+  try {
+    await sendNewCompanyEmail({
+      companyName: company.name,
+      email: company.email,
+      website: company.website,
+    });
+  } catch (emailError) {
+    console.error("Failed to send welcome email:", emailError);
+  }
 
   res.status(201).json({
     success: true,
-    data: company
+    data: company,
   });
 });
-
 
 export const updateCompany = asyncHandler(async (req, res) => {
   let company = await Company.findOne({
@@ -97,30 +116,31 @@ export const updateCompany = asyncHandler(async (req, res) => {
 });
 
 
+
 export const deleteCompany = asyncHandler(async (req, res) => {
   const company = await Company.findOne({
     _id: req.params.id,
-    user_id: req.user._id
+    user_id: req.user._id,
   });
 
   if (!company) {
     return res.status(404).json({
       success: false,
-      error: 'Company not found'
+      error: "Company not found",
     });
   }
 
-  // if (company.logo) {
-  //   const logoPath = path.join(__dirname, '..', company.logo);
-  //   if (fs.existsSync(logoPath)) {
-  //     fs.unlinkSync(logoPath);
-  //   }
-  // }
+  if (company.logo) {
+    const logoFullPath = path.join(__dirname, "..", "public", company.logo);
+    if (fs.existsSync(logoFullPath)) {
+      fs.unlinkSync(logoFullPath);
+    }
+  }
 
   await company.deleteOne();
 
   res.status(200).json({
     success: true,
-    data: {}
+    data: {},
   });
 });
