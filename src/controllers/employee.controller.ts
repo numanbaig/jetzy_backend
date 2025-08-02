@@ -37,17 +37,11 @@ export const getEmployee = asyncHandler(async (req, res) => {
 export const createEmployee = asyncHandler(async (req, res) => {
   const { first_name, last_name, company_id, email, phone } = req.body;
 
+  console.log(req.body);
   const company = await Company.findOne({
     _id: company_id,
     user_id: req.user._id
   });
-
-  if (!company) {
-    return res.status(400).json({
-      success: false,
-      error: 'Company not found or unauthorized'
-    });
-  }
 
   if (email) {
     const existingEmployee = await Employee.findOne({ email });
@@ -58,6 +52,13 @@ export const createEmployee = asyncHandler(async (req, res) => {
       });
     }
   }
+  if (!company) {
+    return res.status(400).json({
+      success: false,
+      error: 'Company not found or unauthorized'
+    });
+  }
+
 
   const employee = await Employee.create({
     first_name,

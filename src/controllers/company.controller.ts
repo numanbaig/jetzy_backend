@@ -40,6 +40,14 @@ export const getCompany = asyncHandler(async (req, res) => {
 export const createCompany = asyncHandler(async (req, res) => {
   const { name, email, website,logo } = req.body;
 console.log(logo);
+const existingCompany = await Company.findOne({ email });
+if (existingCompany) {
+  return res.status(400).json({
+    success: false,
+    error: "Email already exists in our system",
+  });
+}
+
   let logoPath;
   if (req.file) {
     const ext = path.extname(req.file.originalname);
@@ -49,13 +57,6 @@ console.log(logo);
     logoPath = `company_logos/${fileName}`;
   }
 
-  const existingCompany = await Company.findOne({ email });
-  if (existingCompany) {
-    return res.status(400).json({
-      success: false,
-      error: "Email already exists in our system",
-    });
-  }
 
   const company = await Company.create({
     name,
@@ -94,15 +95,6 @@ export const updateCompany = asyncHandler(async (req, res) => {
     });
   }
 
-  // if (req.file) {
-  //   if (company.logo) {
-  //     const oldLogoPath = path.join(__dirname, '..', company.logo);
-  //     if (fs.existsSync(oldLogoPath)) {
-  //       fs.unlinkSync(oldLogoPath);
-  //     }
-  //   }
-  //   req.body.logo = req.file.path;
-  // }
 
   company = await Company.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
@@ -123,19 +115,19 @@ export const deleteCompany = asyncHandler(async (req, res) => {
     user_id: req.user._id,
   });
 
-  if (!company) {
-    return res.status(404).json({
-      success: false,
-      error: "Company not found",
-    });
-  }
+  // if (!company) {
+  //   return res.status(404).json({
+  //     success: false,
+  //     error: "Company not found",
+  //   });
+  // }
 
-  if (company.logo) {
-    const logoFullPath = path.join(__dirname, "..", "public", company.logo);
-    if (fs.existsSync(logoFullPath)) {
-      fs.unlinkSync(logoFullPath);
-    }
-  }
+  // if (company.logo) {
+  //   const logoFullPath = path.join(__dirname, "..", "public", company.logo);
+  //   if (fs.existsSync(logoFullPath)) {
+  //     fs.unlinkSync(logoFullPath);
+  //   }
+  // }
 
   await company.deleteOne();
 
